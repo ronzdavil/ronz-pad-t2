@@ -13,7 +13,7 @@ import {
 } from './utils/crypto';
 
 export default function App() {
-  // Notes
+  // Notes state
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem('ronzpad_notes');
     return saved ? JSON.parse(saved) : [];
