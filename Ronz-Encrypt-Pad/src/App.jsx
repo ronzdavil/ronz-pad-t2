@@ -20,6 +20,7 @@ export default function App() {
   const [search, setSearch] = useState('');
   const [sidebar, setSidebar] = useState(false);
 
+  // Password states
   const [showPass, setShowPass] = useState(false);
   const [passInput, setPassInput] = useState('');
   const [passError, setPassError] = useState('');
@@ -30,6 +31,11 @@ export default function App() {
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [settingsError, setSettingsError] = useState('');
+
+  // **App unlock on startup**
+  const [appUnlocked, setAppUnlocked] = useState(false);
+  const [appPassInput, setAppPassInput] = useState('');
+  const [appPassError, setAppPassError] = useState('');
 
   const activeNote = notes.find(n => n.id === activeNoteId);
 
@@ -107,14 +113,48 @@ export default function App() {
     alert('Password updated successfully!');
   };
 
+  // **App unlock submit**
+  const submitAppPassword = (e) => {
+    e.preventDefault();
+    if (appPassInput !== getStoredPassword()) {
+      setAppPassError('Wrong password');
+      return;
+    }
+    setAppUnlocked(true);
+  };
+
   const filtered = notes.filter(n =>
     n.title.toLowerCase().includes(search.toLowerCase()) ||
     n.content.toLowerCase().includes(search.toLowerCase())
   );
 
+  // **If app is locked, show full-screen unlock modal**
+  if (!appUnlocked) {
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+        <form onSubmit={submitAppPassword} className="bg-white p-6 rounded-2xl w-80">
+          <h3 className="text-center font-bold mb-3">Enter Master Password</h3>
+          <input
+            autoFocus
+            type="password"
+            value={appPassInput}
+            onChange={e => { setAppPassInput(e.target.value); setAppPassError(''); }}
+            className="w-full p-3 bg-slate-100 rounded-xl outline-none border-none focus:ring-0"
+          />
+          {appPassError && <p className="text-red-500 text-xs mt-2">{appPassError}</p>}
+          <div className="flex gap-2 mt-4">
+            <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">
+              Unlock
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  // **Main app render**
   return (
     <div className="h-screen flex bg-slate-100 text-slate-900 font-semibold">
-
       {/* SIDEBAR */}
       <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r transition-transform
         ${sidebar ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static`}>
@@ -166,7 +206,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* SETTINGS BUTTON */}
         <div className="p-3 border-t">
           <button
             onClick={() => setShowSettings(true)}
@@ -179,8 +218,6 @@ export default function App() {
 
       {/* MAIN */}
       <main className="flex-1 flex flex-col">
-
-        {/* HEADER */}
         <header className="flex items-center gap-3 p-4 bg-white border-b">
           <button className="md:hidden" onClick={() => setSidebar(true)}>
             <Menu />
@@ -205,7 +242,6 @@ export default function App() {
           )}
         </header>
 
-        {/* HOME */}
         {activeNoteId === null && (
           <div className="flex-1 p-6 overflow-y-auto">
             <h1 className="text-3xl font-extrabold text-blue-600 mb-2">
@@ -237,7 +273,6 @@ export default function App() {
           </div>
         )}
 
-        {/* EDITOR */}
         {activeNote && (
           <textarea
             value={activeNote.content}
