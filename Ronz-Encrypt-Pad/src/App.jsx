@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Plus, Search, Shield, ShieldOff, Trash2, Menu, X
+  Plus, Search, Shield, ShieldOff, Trash2, Menu, X, Settings, Home
 } from 'lucide-react';
 import {
   encryptData,
   decryptData,
   isEncrypted,
-  getStoredPassword
+  getStoredPassword,
+  setStoredPassword
 } from './utils/crypto';
 
 export default function App() {
@@ -24,6 +25,11 @@ export default function App() {
   const [passError, setPassError] = useState('');
   const [passAction, setPassAction] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
+
+  const [showSettings, setShowSettings] = useState(false);
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [settingsError, setSettingsError] = useState('');
 
   const activeNote = notes.find(n => n.id === activeNoteId);
 
@@ -87,6 +93,20 @@ export default function App() {
     setPassAction(null);
   };
 
+  const submitSettings = (e) => {
+    e.preventDefault();
+    if (currentPass !== getStoredPassword()) {
+      setSettingsError('Current password is wrong');
+      return;
+    }
+    setStoredPassword(newPass);
+    setShowSettings(false);
+    setCurrentPass('');
+    setNewPass('');
+    setSettingsError('');
+    alert('Password updated successfully!');
+  };
+
   const filtered = notes.filter(n =>
     n.title.toLowerCase().includes(search.toLowerCase()) ||
     n.content.toLowerCase().includes(search.toLowerCase())
@@ -115,6 +135,14 @@ export default function App() {
         </div>
 
         <div className="px-3 space-y-2 overflow-y-auto">
+          {activeNote && (
+            <button
+              onClick={() => setActiveNoteId(null)}
+              className="flex items-center gap-2 p-3 bg-blue-50 rounded-xl w-full hover:bg-blue-100"
+            >
+              <Home className="w-4 h-4" /> Home
+            </button>
+          )}
           {filtered.map(note => (
             <div
               key={note.id}
@@ -136,6 +164,16 @@ export default function App() {
               </p>
             </div>
           ))}
+        </div>
+
+        {/* SETTINGS BUTTON */}
+        <div className="p-3 border-t">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex items-center gap-2 p-3 bg-blue-50 rounded-xl w-full hover:bg-blue-100"
+          >
+            <Settings className="w-4 h-4" /> Settings
+          </button>
         </div>
       </aside>
 
@@ -232,6 +270,39 @@ export default function App() {
               </button>
               <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">
                 Confirm
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* SETTINGS MODAL */}
+      {showSettings && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <form onSubmit={submitSettings} className="bg-white p-6 rounded-2xl w-80">
+            <h3 className="text-center font-bold mb-3">Change Password</h3>
+            <input
+              autoFocus
+              type="password"
+              value={currentPass}
+              onChange={e => { setCurrentPass(e.target.value); setSettingsError(''); }}
+              placeholder="Current Password"
+              className="w-full p-3 mb-3 bg-slate-100 rounded-xl outline-none border-none focus:ring-0"
+            />
+            <input
+              type="password"
+              value={newPass}
+              onChange={e => setNewPass(e.target.value)}
+              placeholder="New Password"
+              className="w-full p-3 mb-2 bg-slate-100 rounded-xl outline-none border-none focus:ring-0"
+            />
+            {settingsError && <p className="text-red-500 text-xs mt-1">{settingsError}</p>}
+            <div className="flex gap-2 mt-4">
+              <button type="button" onClick={() => setShowSettings(false)} className="flex-1">
+                Cancel
+              </button>
+              <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">
+                Save
               </button>
             </div>
           </form>
