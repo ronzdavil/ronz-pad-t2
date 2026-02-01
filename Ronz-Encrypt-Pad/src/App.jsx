@@ -13,7 +13,7 @@ import {
 } from './utils/crypto';
 
 export default function App() {
-  // Notes state
+  // --- Notes ---
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem('ronzpad_notes');
     return saved ? JSON.parse(saved) : [];
@@ -21,19 +21,20 @@ export default function App() {
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [search, setSearch] = useState('');
   const [sidebar, setSidebar] = useState(false);
+  const [selectedNotes, setSelectedNotes] = useState([]);
 
-  // App unlock
+  // --- App Unlock ---
   const [appUnlocked, setAppUnlocked] = useState(false);
   const [appPassInput, setAppPassInput] = useState('');
   const [appPassError, setAppPassError] = useState('');
 
-  // Note password modal
+  // --- Note Password Modal ---
   const [showPass, setShowPass] = useState(false);
   const [passAction, setPassAction] = useState(null);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [passError, setPassError] = useState('');
 
-  // Settings modal
+  // --- Settings ---
   const [showSettings, setShowSettings] = useState(false);
   const [currentAppPass, setCurrentAppPass] = useState('');
   const [newAppPass, setNewAppPass] = useState('');
@@ -41,14 +42,35 @@ export default function App() {
   const [newNotePass, setNewNotePass] = useState('');
   const [settingsError, setSettingsError] = useState('');
 
+  // --- Toast Notification ---
+  const [toast, setToast] = useState(null);
+
   const activeNote = notes.find(n => n.id === activeNoteId);
 
-  // Auto-save notes
+  // --- Auto-save notes ---
   useEffect(() => {
     localStorage.setItem('ronzpad_notes', JSON.stringify(notes));
   }, [notes]);
 
-  // Add note
+  // --- Browser Notification ---
+  const notify = (message) => {
+    if (!("Notification" in window)) return;
+    if (Notification.permission === "granted") {
+      new Notification(message);
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(p => {
+        if (p === "granted") new Notification(message);
+      });
+    }
+  };
+
+  // --- In-app Toast ---
+  const showToast = (message, duration = 2000) => {
+    setToast(message);
+    setTimeout(() => setToast(null), duration);
+  };
+
+  // --- Add Note ---
   const addNote = () => {
     const note = {
       id: Date.now(),
@@ -60,13 +82,14 @@ export default function App() {
     setNotes([note, ...notes]);
     setActiveNoteId(note.id);
     setSidebar(false);
+    showToast('New note added!');
   };
 
   const updateNote = (id, data) => {
     setNotes(notes.map(n => n.id === id ? { ...n, ...data } : n));
   };
 
-  // Note actions
+  // --- Ask Password ---
   const askPassword = (action, noteId = null) => {
     setPassAction(action);
     setPendingDelete(noteId);
@@ -78,12 +101,16 @@ export default function App() {
     e.preventDefault();
     const notePass = getNotePassword();
 
+    // Encrypt note
     if (passAction === 'encrypt') {
       updateNote(activeNote.id, {
         content: encryptData(activeNote.content, notePass)
       });
+      showToast('Note encrypted!');
+      notify('Note encrypted!');
     }
 
+    // Decrypt note
     if (passAction === 'decrypt') {
       const text = decryptData(activeNote.content, notePass);
       if (!text) {
@@ -91,18 +118,32 @@ export default function App() {
         return;
       }
       updateNote(activeNote.id, { content: text });
+      showToast('Note decrypted!');
+      notify('Note decrypted!');
     }
 
+    // Single delete
     if (passAction === 'delete') {
       setNotes(notes.filter(n => n.id !== pendingDelete));
       setActiveNoteId(null);
+      showToast('Note deleted!');
+      notify('Note deleted!');
+    }
+
+    // Multi-delete
+    if (passAction === 'multi-delete') {
+      setNotes(notes.filter(n => !selectedNotes.includes(n.id)));
+      setSelectedNotes([]);
+      setActiveNoteId(null);
+      showToast('Selected notes deleted!');
+      notify('Selected notes deleted!');
     }
 
     setShowPass(false);
     setPassAction(null);
   };
 
-  // App unlock
+  // --- App Unlock ---
   const submitAppPassword = (e) => {
     e.preventDefault();
     if (appPassInput !== getAppPassword()) {
@@ -112,24 +153,23 @@ export default function App() {
     setAppUnlocked(true);
   };
 
-  // Save note manually
+  // --- Save Note ---
   const saveNote = () => {
     localStorage.setItem('ronzpad_notes', JSON.stringify(notes));
-    alert('Note saved!');
+    showToast('Note saved!');
+    notify('Note saved!');
   };
 
-  // Settings modal
+  // --- Settings ---
   const submitSettings = (e) => {
     e.preventDefault();
 
-    // Update App password
     if (currentAppPass && currentAppPass !== getAppPassword()) {
       setSettingsError('Current App password incorrect');
       return;
     }
     if (newAppPass) setAppPassword(newAppPass);
 
-    // Update Note password
     if (currentNotePass && currentNotePass !== getNotePassword()) {
       setSettingsError('Current Note password incorrect');
       return;
@@ -142,20 +182,21 @@ export default function App() {
     setCurrentNotePass('');
     setNewNotePass('');
     setSettingsError('');
-    alert('Passwords updated!');
+    showToast('Passwords updated!');
+    notify('Passwords updated!');
   };
 
-  // Filter notes
+  // --- Filter Notes ---
   const filtered = notes.filter(n =>
     n.title.toLowerCase().includes(search.toLowerCase()) ||
     n.content.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleContentChange = (text) => {
-    updateNote(activeNote.id, { content: text }); // auto-save as typing
+    updateNote(activeNote.id, { content: text });
   };
 
-  // ----- App Lock Screen -----
+  // ----- APP LOCK SCREEN -----
   if (!appUnlocked) {
     return (
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -170,9 +211,7 @@ export default function App() {
           />
           {appPassError && <p className="text-red-500 text-xs mt-2">{appPassError}</p>}
           <div className="flex gap-2 mt-4">
-            <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">
-              Unlock
-            </button>
+            <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">Unlock</button>
           </div>
         </form>
       </div>
@@ -211,27 +250,47 @@ export default function App() {
               <Home className="w-4 h-4" /> Home
             </button>
           )}
+
+          {/* Notes with multi-select */}
           {filtered.map(note => (
-            <div
-              key={note.id}
-              onClick={() => { setActiveNoteId(note.id); setSidebar(false); }}
-              className="p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-blue-50"
-            >
-              <div className="flex justify-between items-center">
-                <span className="truncate">{note.title}</span>
-                <button
-                  onClick={(e) => {
+            <div key={note.id} className="p-3 bg-slate-50 rounded-xl hover:bg-blue-50 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedNotes.includes(note.id)}
+                  onChange={(e) => {
                     e.stopPropagation();
-                    askPassword('delete', note.id);
-                  }}>
-                  <Trash2 className="w-4 h-4 text-red-500" />
-                </button>
+                    if (e.target.checked) setSelectedNotes([...selectedNotes, note.id]);
+                    else setSelectedNotes(selectedNotes.filter(id => id !== note.id));
+                  }}
+                />
+                <div onClick={() => { setActiveNoteId(note.id); setSidebar(false); }}>
+                  <div className="truncate">{note.title}</div>
+                  <p className="text-xs text-slate-500 mt-1">{isEncrypted(note.content) ? '🔒 Encrypted' : note.content.slice(0, 40)}</p>
+                </div>
               </div>
-              <p className="text-xs text-slate-500 mt-1">
-                {isEncrypted(note.content) ? '🔒 Encrypted' : note.content.slice(0, 40)}
-              </p>
+              <button onClick={(e) => { e.stopPropagation(); askPassword('delete', note.id); }}>
+                <Trash2 className="w-4 h-4 text-red-500" />
+              </button>
             </div>
           ))}
+
+          {/* Clear Selected */}
+          {selectedNotes.length > 0 && (
+            <button
+              onClick={() => {
+                const pass = prompt('Enter Note Password to delete selected notes:');
+                if (pass !== getNotePassword()) {
+                  alert('Wrong password!');
+                  return;
+                }
+                askPassword('multi-delete');
+              }}
+              className="flex items-center gap-2 p-3 mt-2 w-full bg-red-100 text-red-600 rounded-xl hover:bg-red-200"
+            >
+              <Trash2 className="w-4 h-4" /> Clear Selected
+            </button>
+          )}
         </div>
 
         <div className="p-3 border-t">
@@ -260,10 +319,9 @@ export default function App() {
               />
 
               <button
-                onClick={() =>
-                  askPassword(isEncrypted(activeNote.content) ? 'decrypt' : 'encrypt')
-                }
-                className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                onClick={() => askPassword(isEncrypted(activeNote.content) ? 'decrypt' : 'encrypt')}
+                className="p-2 rounded-xl bg-blue-100 text-blue-600"
+              >
                 {isEncrypted(activeNote.content) ? <Shield /> : <ShieldOff />}
               </button>
 
@@ -283,7 +341,8 @@ export default function App() {
             <p className="text-slate-600 mb-6">Secure notes · {notes.length} total</p>
             <button
               onClick={addNote}
-              className="mb-6 px-6 py-3 bg-blue-600 text-white rounded-xl shadow">
+              className="mb-6 px-6 py-3 bg-blue-600 text-white rounded-xl shadow"
+            >
               + New Note
             </button>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -291,7 +350,8 @@ export default function App() {
                 <div
                   key={n.id}
                   onClick={() => setActiveNoteId(n.id)}
-                  className="bg-white p-4 rounded-xl shadow cursor-pointer hover:ring-2 hover:ring-blue-400">
+                  className="bg-white p-4 rounded-xl shadow cursor-pointer hover:ring-2 hover:ring-blue-400"
+                >
                   <h3 className="font-bold truncate">{n.title}</h3>
                   <p className="text-sm text-slate-500 mt-2">
                     {isEncrypted(n.content) ? '🔒 Encrypted' : n.content.slice(0, 90) || 'Empty'}
@@ -313,7 +373,7 @@ export default function App() {
         )}
       </main>
 
-      {/* PASSWORD MODALS */}
+      {/* PASSWORD MODAL */}
       {showPass && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <form onSubmit={submitPassword} className="bg-white p-6 rounded-2xl w-80">
@@ -326,9 +386,7 @@ export default function App() {
             />
             {passError && <p className="text-red-500 text-xs mt-2">{passError}</p>}
             <div className="flex gap-2 mt-4">
-              <button type="button" onClick={() => setShowPass(false)} className="flex-1">
-                Cancel
-              </button>
+              <button type="button" onClick={() => setShowPass(false)} className="flex-1">Cancel</button>
               <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">Confirm</button>
             </div>
           </form>
@@ -375,14 +433,17 @@ export default function App() {
 
             {settingsError && <p className="text-red-500 text-xs mt-1">{settingsError}</p>}
             <div className="flex gap-2 mt-4">
-              <button type="button" onClick={() => setShowSettings(false)} className="flex-1">
-                Cancel
-              </button>
-              <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">
-                Save
-              </button>
+              <button type="button" onClick={() => setShowSettings(false)} className="flex-1">Cancel</button>
+              <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">Save</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* TOAST */}
+      {toast && (
+        <div className="fixed bottom-5 right-5 bg-blue-600 text-white px-4 py-2 rounded-xl shadow-lg">
+          {toast}
         </div>
       )}
     </div>
