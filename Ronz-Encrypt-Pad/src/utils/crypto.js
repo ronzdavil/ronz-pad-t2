@@ -1,24 +1,30 @@
 import CryptoJS from 'crypto-js';
 
-// --- APP PASSWORD ---
-const APP_PASSWORD_KEY = 'ronzpad_app_pass';
+// --- App Password ---
 export const getAppPassword = () => {
-  return localStorage.getItem(APP_PASSWORD_KEY) || 'open';
+  if (!localStorage.getItem('ronzpad_app_password')) {
+    localStorage.setItem('ronzpad_app_password', 'open'); // default
+  }
+  return localStorage.getItem('ronzpad_app_password');
 };
+
 export const setAppPassword = (newPassword) => {
-  localStorage.setItem(APP_PASSWORD_KEY, newPassword);
+  localStorage.setItem('ronzpad_app_password', newPassword);
 };
 
-// --- NOTE ENCRYPTION PASSWORD ---
-const NOTE_PASSWORD_KEY = 'ronzpad_note_pass';
+// --- Note Encryption Password ---
 export const getNotePassword = () => {
-  return localStorage.getItem(NOTE_PASSWORD_KEY) || 'ronzpad125';
-};
-export const setNotePassword = (newPassword) => {
-  localStorage.setItem(NOTE_PASSWORD_KEY, newPassword);
+  if (!localStorage.getItem('ronzpad_note_password')) {
+    localStorage.setItem('ronzpad_note_password', 'ronzpad125'); // default
+  }
+  return localStorage.getItem('ronzpad_note_password');
 };
 
-// --- ENCRYPT / DECRYPT ---
+export const setNotePassword = (newPassword) => {
+  localStorage.setItem('ronzpad_note_password', newPassword);
+};
+
+// --- Encrypt / Decrypt ---
 export const encryptData = (data, password) => {
   return CryptoJS.AES.encrypt(data, password).toString();
 };
@@ -33,7 +39,7 @@ export const decryptData = (encryptedData, password) => {
   }
 };
 
-// --- CHECK IF DATA IS ENCRYPTED ---
+// --- Check if note is encrypted ---
 export const isEncrypted = (data) => {
   return typeof data === 'string' && data.startsWith('U2FsdGVkX1');
 };
