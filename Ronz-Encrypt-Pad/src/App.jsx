@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Plus, Search, Shield, ShieldOff, Trash2, Menu, X, Settings, Home
+  Plus, Search, Shield, ShieldOff, Trash2, Menu, X, Settings, Home, Save
 } from 'lucide-react';
 import {
   encryptData,
@@ -32,13 +32,13 @@ export default function App() {
   const [newPass, setNewPass] = useState('');
   const [settingsError, setSettingsError] = useState('');
 
-  // **App unlock on startup**
   const [appUnlocked, setAppUnlocked] = useState(false);
   const [appPassInput, setAppPassInput] = useState('');
   const [appPassError, setAppPassError] = useState('');
 
   const activeNote = notes.find(n => n.id === activeNoteId);
 
+  // Auto-save notes on change
   useEffect(() => {
     localStorage.setItem('ronzpad_notes', JSON.stringify(notes));
   }, [notes]);
@@ -113,7 +113,6 @@ export default function App() {
     alert('Password updated successfully!');
   };
 
-  // **App unlock submit**
   const submitAppPassword = (e) => {
     e.preventDefault();
     if (appPassInput !== getStoredPassword()) {
@@ -128,7 +127,18 @@ export default function App() {
     n.content.toLowerCase().includes(search.toLowerCase())
   );
 
-  // **If app is locked, show full-screen unlock modal**
+  const handleContentChange = (text) => {
+    // Update note content as user types (auto-save)
+    updateNote(activeNote.id, { content: text });
+  };
+
+  const saveNote = () => {
+    // Optional explicit save button
+    localStorage.setItem('ronzpad_notes', JSON.stringify(notes));
+    alert('Note saved!');
+  };
+
+  // If app is locked, show full-screen unlock modal
   if (!appUnlocked) {
     return (
       <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -152,7 +162,6 @@ export default function App() {
     );
   }
 
-  // **Main app render**
   return (
     <div className="h-screen flex bg-slate-100 text-slate-900 font-semibold">
       {/* SIDEBAR */}
@@ -238,6 +247,13 @@ export default function App() {
                 className="p-2 rounded-xl bg-blue-100 text-blue-600">
                 {isEncrypted(activeNote.content) ? <Shield /> : <ShieldOff />}
               </button>
+
+              <button
+                onClick={saveNote}
+                className="p-2 rounded-xl bg-blue-100 text-blue-600 flex items-center gap-1"
+              >
+                <Save className="w-4 h-4" /> Save
+              </button>
             </>
           )}
         </header>
@@ -276,8 +292,8 @@ export default function App() {
         {activeNote && (
           <textarea
             value={activeNote.content}
+            onChange={e => handleContentChange(e.target.value)}
             disabled={isEncrypted(activeNote.content)}
-            onChange={e => updateNote(activeNote.id, { content: e.target.value })}
             className="flex-1 p-6 text-lg bg-white outline-none border-none resize-none focus:ring-0"
             placeholder="Start typing..."
           />
@@ -343,7 +359,6 @@ export default function App() {
           </form>
         </div>
       )}
-
     </div>
   );
 }
