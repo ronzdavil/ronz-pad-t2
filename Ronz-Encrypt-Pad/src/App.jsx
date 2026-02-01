@@ -1,46 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Plus, Search, Save, Shield, ShieldOff, FileText, Image as ImageIcon,
-  Music, Video, Trash2, FilePlus, Menu, Settings, X, Lock, ArrowLeft
+  Plus, Search, Shield, ShieldOff, Trash2, Menu, X
 } from 'lucide-react';
 import {
   encryptData,
   decryptData,
   isEncrypted,
-  getStoredPassword,
-  setStoredPassword
+  getStoredPassword
 } from './utils/crypto';
 
 export default function App() {
   const [notes, setNotes] = useState(() => {
     const saved = localStorage.getItem('ronzpad_notes');
-    return saved ? JSON.parse(saved) : [{
-      id: 1,
-      title: 'Welcome to Ronz Pad',
-      content: 'This is your secure, modern notepad. Everything you type here is saved locally.',
-      timestamp: Date.now(),
-      type: 'text',
-      files: []
-    }];
+    return saved ? JSON.parse(saved) : [];
   });
 
-  const [activeNoteId, setActiveNoteId] = useState(notes[0]?.id);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeNoteId, setActiveNoteId] = useState(null);
+  const [search, setSearch] = useState('');
+  const [sidebar, setSidebar] = useState(false);
 
-  // 🔐 Password modal state
-  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
-  const [passwordAction, setPasswordAction] = useState(null); // encrypt | decrypt | delete
-  const [passwordInput, setPasswordInput] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [pendingDeleteId, setPendingDeleteId] = useState(null);
-
-  // Settings
-  const [oldPass, setOldPass] = useState('');
-  const [newPass, setNewPass] = useState('');
-  const [settingsError, setSettingsError] = useState('');
-  const [settingsSuccess, setSettingsSuccess] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [passInput, setPassInput] = useState('');
+  const [passError, setPassError] = useState('');
+  const [passAction, setPassAction] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const activeNote = notes.find(n => n.id === activeNoteId);
 
@@ -49,229 +32,202 @@ export default function App() {
   }, [notes]);
 
   const addNote = () => {
-    const newNote = {
+    const note = {
       id: Date.now(),
-      title: 'New Note',
+      title: 'Untitled Note',
       content: '',
-      timestamp: Date.now(),
-      type: 'text',
-      files: []
+      files: [],
+      created: Date.now()
     };
-    setNotes([newNote, ...notes]);
-    setActiveNoteId(newNote.id);
-    setIsSidebarOpen(false);
+    setNotes([note, ...notes]);
+    setActiveNoteId(note.id);
+    setSidebar(false);
   };
 
-  const updateNote = (id, updates) => {
-    setNotes(notes.map(n =>
-      n.id === id ? { ...n, ...updates, timestamp: Date.now() } : n
-    ));
+  const updateNote = (id, data) => {
+    setNotes(notes.map(n => n.id === id ? { ...n, ...data } : n));
   };
 
-  // 🗑️ DELETE → PASSWORD REQUIRED
-  const deleteNote = (id, e) => {
-    e.stopPropagation();
-    setPendingDeleteId(id);
-    setPasswordAction('delete');
-    setShowPasswordPrompt(true);
-    setPasswordInput('');
-    setPasswordError('');
+  const askPassword = (action, noteId = null) => {
+    setPassAction(action);
+    setPendingDelete(noteId);
+    setShowPass(true);
+    setPassInput('');
+    setPassError('');
   };
 
-  // 🔐 Password submit handler
-  const handlePasswordSubmit = (e) => {
+  const submitPassword = (e) => {
     e.preventDefault();
-    const correctPass = getStoredPassword();
-
-    if (passwordInput !== correctPass) {
-      setPasswordError('Incorrect password');
+    if (passInput !== getStoredPassword()) {
+      setPassError('Wrong password');
       return;
     }
 
-    if (passwordAction === 'decrypt') {
-      const decrypted = decryptData(activeNote.content, passwordInput);
-      if (decrypted === null) {
-        setPasswordError('Decryption failed');
+    if (passAction === 'encrypt') {
+      updateNote(activeNote.id, {
+        content: encryptData(activeNote.content, passInput)
+      });
+    }
+
+    if (passAction === 'decrypt') {
+      const text = decryptData(activeNote.content, passInput);
+      if (!text) {
+        setPassError('Decrypt failed');
         return;
       }
-      updateNote(activeNote.id, { content: decrypted });
+      updateNote(activeNote.id, { content: text });
     }
 
-    if (passwordAction === 'encrypt') {
-      updateNote(activeNote.id, {
-        content: encryptData(activeNote.content, passwordInput)
-      });
+    if (passAction === 'delete') {
+      setNotes(notes.filter(n => n.id !== pendingDelete));
+      setActiveNoteId(null);
     }
 
-    if (passwordAction === 'delete' && pendingDeleteId) {
-      const remaining = notes.filter(n => n.id !== pendingDeleteId);
-      setNotes(remaining);
-
-      if (activeNoteId === pendingDeleteId) {
-        setActiveNoteId(remaining[0]?.id || null);
-      }
-      setPendingDeleteId(null);
-    }
-
-    setShowPasswordPrompt(false);
-    setPasswordInput('');
-    setPasswordError('');
-    setPasswordAction(null);
+    setShowPass(false);
+    setPassAction(null);
   };
 
-  const requestEncryptionAction = (action) => {
-    setPasswordAction(action);
-    setShowPasswordPrompt(true);
-    setPasswordInput('');
-    setPasswordError('');
-  };
-
-  const handlePasswordChange = (e) => {
-    e.preventDefault();
-    const currentPass = getStoredPassword();
-
-    if (oldPass !== currentPass) {
-      setSettingsError('Old password incorrect');
-      return;
-    }
-    if (newPass.length < 4) {
-      setSettingsError('New password too short');
-      return;
-    }
-
-    setStoredPassword(newPass);
-    setSettingsSuccess('Password updated!');
-    setSettingsError('');
-    setOldPass('');
-    setNewPass('');
-    setTimeout(() => setSettingsSuccess(''), 3000);
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file || !activeNote) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const fileData = {
-        id: Date.now(),
-        name: file.name,
-        type: file.type,
-        data: event.target.result
-      };
-      updateNote(activeNote.id, {
-        files: [...(activeNote.files || []), fileData]
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const filteredNotes = notes.filter(n =>
-    n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    n.content.toLowerCase().includes(searchQuery.toLowerCase())
+  const filtered = notes.filter(n =>
+    n.title.toLowerCase().includes(search.toLowerCase()) ||
+    n.content.toLowerCase().includes(search.toLowerCase())
   );
 
-  /* ================= UI ================= */
-
   return (
-    <div className="flex h-screen bg-white overflow-hidden font-sans relative">
+    <div className="h-screen flex bg-slate-100 text-slate-900 font-semibold">
 
       {/* SIDEBAR */}
-      <aside className={`fixed inset-0 z-40 bg-white transition-transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
-        <div className="p-4 border-b flex justify-between">
-          <h1 className="font-bold">Ronz Pad</h1>
-          <div className="flex gap-2">
-            <button onClick={addNote}><Plus /></button>
-            <button onClick={() => setIsSidebarOpen(false)}><X /></button>
-          </div>
+      <aside className={`fixed inset-y-0 left-0 z-40 w-72 bg-white border-r transition-transform
+        ${sidebar ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:static`}>
+        <div className="p-4 flex justify-between items-center border-b">
+          <span className="text-xl font-bold text-blue-600">Ronz Pad</span>
+          <button className="md:hidden" onClick={() => setSidebar(false)}>
+            <X />
+          </button>
         </div>
 
-        <div className="p-4">
+        <div className="p-3">
           <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
             placeholder="Search notes..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full p-3 bg-slate-100 rounded-xl"
+            className="w-full p-3 rounded-xl bg-slate-100 outline-none border-none focus:ring-0"
           />
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-2">
-          {filteredNotes.map(note => (
+        <div className="px-3 space-y-2 overflow-y-auto">
+          {filtered.map(note => (
             <div
               key={note.id}
-              onClick={() => { setActiveNoteId(note.id); setIsSidebarOpen(false); }}
-              className="p-4 bg-slate-50 rounded-xl cursor-pointer"
+              onClick={() => { setActiveNoteId(note.id); setSidebar(false); }}
+              className="p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-blue-50"
             >
-              <div className="flex justify-between">
-                <strong>{note.title}</strong>
-                <button onClick={(e) => deleteNote(note.id, e)}>
+              <div className="flex justify-between items-center">
+                <span className="truncate">{note.title}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    askPassword('delete', note.id);
+                  }}>
                   <Trash2 className="w-4 h-4 text-red-500" />
                 </button>
               </div>
-              <p className="text-xs text-slate-500">
-                {isEncrypted(note.content) ? '🔒 Encrypted Content' : note.content.slice(0, 40)}
+              <p className="text-xs text-slate-500 mt-1">
+                {isEncrypted(note.content) ? '🔒 Encrypted' : note.content.slice(0, 40)}
               </p>
             </div>
           ))}
         </div>
-
-        <button
-          onClick={() => { setShowSettings(true); setIsSidebarOpen(false); }}
-          className="p-4 border-t text-left"
-        >
-          <Settings className="inline mr-2" /> Settings
-        </button>
       </aside>
 
       {/* MAIN */}
       <main className="flex-1 flex flex-col">
-        <header className="p-4 border-b flex items-center gap-2">
-          <button onClick={() => setIsSidebarOpen(true)}><Menu /></button>
-          <input
-            value={activeNote?.title || ''}
-            onChange={e => updateNote(activeNote.id, { title: e.target.value })}
-            className="font-bold text-lg flex-1"
-          />
-          <button
-            onClick={() =>
-              requestEncryptionAction(isEncrypted(activeNote?.content) ? 'decrypt' : 'encrypt')
-            }
-          >
-            {isEncrypted(activeNote?.content) ? <Shield /> : <ShieldOff />}
+
+        {/* HEADER */}
+        <header className="flex items-center gap-3 p-4 bg-white border-b">
+          <button className="md:hidden" onClick={() => setSidebar(true)}>
+            <Menu />
           </button>
-          <label>
-            <FilePlus />
-            <input type="file" hidden onChange={handleFileUpload} />
-          </label>
+
+          {activeNote && (
+            <>
+              <input
+                value={activeNote.title}
+                onChange={e => updateNote(activeNote.id, { title: e.target.value })}
+                className="flex-1 text-xl bg-transparent outline-none border-none focus:ring-0"
+              />
+
+              <button
+                onClick={() =>
+                  askPassword(isEncrypted(activeNote.content) ? 'decrypt' : 'encrypt')
+                }
+                className="p-2 rounded-xl bg-blue-100 text-blue-600">
+                {isEncrypted(activeNote.content) ? <Shield /> : <ShieldOff />}
+              </button>
+            </>
+          )}
         </header>
 
-        <textarea
-          className="flex-1 p-6 text-lg"
-          disabled={isEncrypted(activeNote?.content)}
-          value={activeNote?.content || ''}
-          onChange={e => updateNote(activeNote.id, { content: e.target.value })}
-        />
+        {/* HOME */}
+        {activeNoteId === null && (
+          <div className="flex-1 p-6 overflow-y-auto">
+            <h1 className="text-3xl font-extrabold text-blue-600 mb-2">
+              Ronz Encrypt-Pad
+            </h1>
+            <p className="text-slate-600 mb-6">
+              Secure notes · {notes.length} total
+            </p>
+
+            <button
+              onClick={addNote}
+              className="mb-6 px-6 py-3 bg-blue-600 text-white rounded-xl shadow">
+              + New Note
+            </button>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {notes.map(n => (
+                <div
+                  key={n.id}
+                  onClick={() => setActiveNoteId(n.id)}
+                  className="bg-white p-4 rounded-xl shadow cursor-pointer hover:ring-2 hover:ring-blue-400">
+                  <h3 className="font-bold truncate">{n.title}</h3>
+                  <p className="text-sm text-slate-500 mt-2">
+                    {isEncrypted(n.content) ? '🔒 Encrypted' : n.content.slice(0, 90) || 'Empty'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* EDITOR */}
+        {activeNote && (
+          <textarea
+            value={activeNote.content}
+            disabled={isEncrypted(activeNote.content)}
+            onChange={e => updateNote(activeNote.id, { content: e.target.value })}
+            className="flex-1 p-6 text-lg bg-white outline-none border-none resize-none focus:ring-0"
+            placeholder="Start typing..."
+          />
+        )}
       </main>
 
       {/* PASSWORD MODAL */}
-      {showPasswordPrompt && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-          <form onSubmit={handlePasswordSubmit} className="bg-white p-6 rounded-2xl w-72">
-            <h3 className="font-bold text-center mb-3">
-              Enter password to {passwordAction}
+      {showPass && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <form onSubmit={submitPassword} className="bg-white p-6 rounded-2xl w-80">
+            <h3 className="text-center font-bold mb-3">
+              Enter password
             </h3>
             <input
               autoFocus
               type="password"
-              value={passwordInput}
-              onChange={e => { setPasswordInput(e.target.value); setPasswordError(''); }}
-              className="w-full p-3 bg-slate-100 rounded-xl"
+              value={passInput}
+              onChange={e => { setPassInput(e.target.value); setPassError(''); }}
+              className="w-full p-3 bg-slate-100 rounded-xl outline-none border-none focus:ring-0"
             />
-            {passwordError && (
-              <p className="text-xs text-red-500 mt-2 text-center">{passwordError}</p>
-            )}
+            {passError && <p className="text-red-500 text-xs mt-2">{passError}</p>}
             <div className="flex gap-2 mt-4">
-              <button type="button" onClick={() => setShowPasswordPrompt(false)} className="flex-1">
+              <button type="button" onClick={() => setShowPass(false)} className="flex-1">
                 Cancel
               </button>
               <button type="submit" className="flex-1 bg-blue-600 text-white rounded-xl">
@@ -282,37 +238,6 @@ export default function App() {
         </div>
       )}
 
-      {/* SETTINGS PANEL */}
-      {showSettings && (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col">
-          <header className="p-4 border-b flex items-center">
-            <button onClick={() => setShowSettings(false)}><ArrowLeft /></button>
-            <h2 className="ml-2 font-bold">Settings</h2>
-          </header>
-
-          <form onSubmit={handlePasswordChange} className="p-6 space-y-4">
-            <input
-              type="password"
-              placeholder="Old password"
-              value={oldPass}
-              onChange={e => setOldPass(e.target.value)}
-              className="w-full p-3 bg-slate-100 rounded-xl"
-            />
-            <input
-              type="password"
-              placeholder="New password"
-              value={newPass}
-              onChange={e => setNewPass(e.target.value)}
-              className="w-full p-3 bg-slate-100 rounded-xl"
-            />
-            {settingsError && <p className="text-red-500 text-sm">{settingsError}</p>}
-            {settingsSuccess && <p className="text-green-500 text-sm">{settingsSuccess}</p>}
-            <button className="w-full bg-blue-600 text-white p-3 rounded-xl">
-              Update Password
-            </button>
-          </form>
-        </div>
-      )}
     </div>
   );
 }
